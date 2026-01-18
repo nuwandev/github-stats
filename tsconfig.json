@@ -2,21 +2,22 @@
   "compilerOptions": {
     "module": "nodenext",
     "target": "esnext",
-    "types": [],
-
-    "sourceMap": true,
+    "lib": ["ESNext", "DOM"],
+    "jsx": "react-jsx",
     "declaration": true,
     "declarationMap": true,
-
+    "outDir": "dist",
+    "sourceMap": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
-
-    "strict": true,
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "noUncheckedSideEffectImports": true,
     "moduleDetection": "force",
-    "skipLibCheck": true
-  }
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src/**/*"]
 }
