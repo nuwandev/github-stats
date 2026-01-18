@@ -1,0 +1,45 @@
+{
+  "name": "@nuwan-dev/github-stats",
+  "version": "1.0.0",
+  "description": "A TypeScript library to fetch GitHub user stats (contributions, languages, repo rankings) with optional React components.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepare": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nuwandev/github-stats.git"
+  },
+  "author": "nuwandev",
+  "keywords": [
+    "github",
+    "contributions",
+    "stats",
+    "calendar",
+    "react",
+    "typescript"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.2",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^17.0.0",
+    "prettier": "^3.8.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.53.0"
+  }
+}
