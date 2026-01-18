@@ -1,15 +1,34 @@
 {
-  "name": "github-stats",
+  "name": "@nuwan-dev/github-stats",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A TypeScript library to fetch GitHub user stats (contributions, languages, repo rankings) with optional React components.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "prepare": "npm run build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nuwandev/github-stats.git"
+  },
+  "author": "nuwandev",
+  "keywords": [
+    "github",
+    "contributions",
+    "stats",
+    "calendar",
+    "react",
+    "typescript"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/react": "^19.2.8",
@@ -22,9 +41,5 @@
     "prettier": "^3.8.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.53.0"
-  },
-  "dependencies": {
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3"
   }
 }
