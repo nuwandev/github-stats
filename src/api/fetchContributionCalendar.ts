@@ -32,9 +32,18 @@ function mapCalendar(raw: any): ContributionCalendar {
 export async function fetchContributionCalendar(
   username: string,
   token: string,
-  from: Date,
-  to: Date,
+  start?: Date,
+  end?: Date,
 ): Promise<ContributionCalendar> {
+  if (start && end && start > end) {
+    throw new Error("start date must be before end date");
+  }
+
+  const to = end ? new Date(end) : new Date();
+  const from = start
+    ? new Date(start)
+    : new Date(to.getFullYear() - 1, to.getMonth(), to.getDate());
+
   const query = `
     query getContributions($username: String!, $from: DateTime!, $to: DateTime!) {
       user(login: $username) {

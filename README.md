@@ -39,15 +39,16 @@ import { fetchContributionCalendar } from "@nuwan-dev/github-stats";
 
 // Get a GitHub Personal Access Token with 'read:user' scope
 const calendar = await fetchContributionCalendar(
-  "octocat", // GitHub username
-  process.env.GITHUB_TOKEN, // Your GitHub token
-  new Date("2025-01-01"), // Start date
-  new Date(), // End date
+  "your-username",
+  process.env.GITHUB_TOKEN,
 );
+// from and to are now optional! Defaults to last 12 months
 
 console.log(`Total: ${calendar.total} contributions`);
 console.log(`Weeks: ${calendar.weeks.length}`);
 ```
+
+> **DX Improvement:** `from` and `to` are now optional. If omitted, the calendar defaults to the last 12 months.
 
 ### 2. Render in React
 
@@ -55,13 +56,7 @@ console.log(`Weeks: ${calendar.weeks.length}`);
 import { ContributionGraph } from "@nuwan-dev/github-stats";
 
 export default function GitHubStats({ calendar }) {
-  return (
-    <ContributionGraph
-      calendar={calendar}
-      yearLabel="2025"
-      totalLabel={`${calendar.total.toLocaleString()} contributions`}
-    />
-  );
+  return <ContributionGraph calendar={calendar} />;
 }
 ```
 
@@ -78,9 +73,8 @@ export default async function GitHubStatsPage() {
   const calendar = await fetchContributionCalendar(
     "your-username",
     process.env.GITHUB_TOKEN!,
-    new Date(new Date().getFullYear(), 0, 1), // Jan 1st this year
-    new Date(),
   );
+  // from and to are now optional! Defaults to last 12 months
 
   return (
     <div className="container mx-auto p-8">
@@ -114,11 +108,10 @@ export default function GitHubStats() {
     async function loadData() {
       try {
         const data = await fetchContributionCalendar(
-          "octocat",
+          "nuwandev", // GitHub username
           "YOUR_TOKEN", // ⚠️ Never expose tokens in client-side code!
-          new Date("2025-01-01"),
-          new Date(),
         );
+        // from and to are now optional! Defaults to last 12 months
         setCalendar(data);
       } catch (error) {
         console.error("Failed to load contributions:", error);
@@ -146,7 +139,7 @@ export default function GitHubStats() {
 
 ## 📚 API Reference
 
-### `fetchContributionCalendar(username, token, from, to)`
+### `fetchContributionCalendar(username, token, from?, to?)`
 
 Fetches contribution data from GitHub's GraphQL API.
 
@@ -154,8 +147,8 @@ Fetches contribution data from GitHub's GraphQL API.
 
 - `username` (string): GitHub username
 - `token` (string): GitHub Personal Access Token with `read:user` scope
-- `from` (Date): Start date for contributions
-- `to` (Date): End date for contributions
+- `from` (Date, optional): Start date for contributions (defaults to 12 months ago)
+- `to` (Date, optional): End date for contributions (defaults to today)
 
 **Returns:** `Promise<ContributionCalendar>`
 
@@ -208,7 +201,7 @@ Custom labels:
 
 ---
 
-## 🔐 Getting a GitHub Token
+## 🔐 Getting a GitHub Token for Testing
 
 1. Go to [GitHub Settings → Developer Settings → Personal Access Tokens](https://github.com/settings/tokens)
 2. Click "Generate new token (classic)"
