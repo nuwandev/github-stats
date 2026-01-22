@@ -1,5 +1,19 @@
 # @nuwan-dev/github-stats
 
+---
+
+## 🆕 v2.0.0: Tailwind v4 Migration & Compiled Styles
+
+- **Breaking:** Styles are no longer injected automatically. **You must add:**
+
+  ```js
+  import "@nuwan-dev/github-stats/style.css";
+  ```
+
+  to your root file (e.g., `index.js`, `main.tsx`, or `_app.tsx`) to ensure the component is styled correctly.
+
+---
+
 > Typed SDK and React component to fetch and render GitHub contribution calendars — stable, composable, production-ready.
 
 [![npm version](https://img.shields.io/npm/v/@nuwan-dev/github-stats.svg)](https://www.npmjs.com/package/@nuwan-dev/github-stats)
@@ -31,6 +45,14 @@ pnpm add @nuwan-dev/github-stats
 ---
 
 ## 🚀 Quick Start
+
+### 0. Import Styles (Required)
+
+Before using the component, import the compiled CSS at the root of your project:
+
+```js
+import "@nuwan-dev/github-stats/style.css";
+```
 
 ### 1. Fetch Calendar Data (Node.js/API)
 
