@@ -2,27 +2,55 @@ import type { ContributionCalendar } from "../types/calendar.js";
 
 const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
-function mapCalendar(raw: any): ContributionCalendar {
+interface GitHubRawResponse {
+  data?: {
+    user?: {
+      contributionsCollection?: {
+        contributionCalendar: {
+          totalContributions: number;
+          weeks: Array<{
+            contributionDays: Array<{
+              date: string;
+              contributionCount: number;
+              color?: string;
+            }>;
+          }>;
+        };
+      };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+type RawCalendar = {
+  weeks?: Array<{
+    contributionDays: Array<{
+      date: string;
+      contributionCount: number;
+      color?: string;
+    }>;
+  }>;
+};
+
+function mapCalendar(raw: RawCalendar): ContributionCalendar {
   let total = 0;
-  const weeks = (raw.weeks ?? []).map((week: any) => ({
-    days: week.contributionDays.map((day: any) => {
-      total += day.contributionCount;
+  const weeks = (raw.weeks ?? []).map((week) => ({
+    days: week.contributionDays.map((day) => {
+      const count = day.contributionCount;
+      total += count;
+
       let level: number;
-      if (day.contributionCount === 0) {
-        level = 0;
-      } else if (day.contributionCount > 10) {
-        level = 4;
-      } else if (day.contributionCount > 5) {
-        level = 3;
-      } else if (day.contributionCount > 2) {
-        level = 2;
-      } else {
-        level = 1;
-      }
+      if (count === 0) level = 0;
+      else if (count <= 2) level = 1;
+      else if (count <= 5) level = 2;
+      else if (count <= 10) level = 3;
+      else level = 4;
+
       return {
         date: day.date,
-        count: day.contributionCount,
+        count,
         level,
+        color: day.color,
       };
     }),
   }));
@@ -35,14 +63,12 @@ export async function fetchContributionCalendar(
   start?: Date,
   end?: Date,
 ): Promise<ContributionCalendar> {
-  if (start && end && start > end) {
-    throw new Error("start date must be before end date");
-  }
-
   const to = end ? new Date(end) : new Date();
   const from = start
     ? new Date(start)
-    : new Date(to.getFullYear() - 1, to.getMonth(), to.getDate());
+    : new Date(new Date(to).setFullYear(to.getFullYear() - 1));
+
+  if (from > to) throw new Error("Start date must be before end date");
 
   const query = `
     query getContributions($username: String!, $from: DateTime!, $to: DateTime!) {
@@ -55,7 +81,6 @@ export async function fetchContributionCalendar(
                 date
                 contributionCount
                 color
-                weekday
               }
             }
           }
@@ -63,31 +88,33 @@ export async function fetchContributionCalendar(
       }
     }
   `;
-  const variables = {
-    username,
-    from: from.toISOString(),
-    to: to.toISOString(),
-  };
 
   const response = await fetch(GITHUB_GRAPHQL_ENDPOINT, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      "User-Agent": "@nuwan-dev/github-stats",
     },
-    body: JSON.stringify({ query, variables }),
+    body: JSON.stringify({
+      query,
+      variables: { username, from: from.toISOString(), to: to.toISOString() },
+    }),
   });
 
-  if (!response.ok) {
-    throw new Error(
-      `GitHub API error: ${response.status} - ${response.statusText}`,
-    );
+  const result: GitHubRawResponse = await response.json();
+
+  if (Array.isArray(result.errors) && result.errors.length > 0) {
+    throw new Error(`GitHub GraphQL Error: ${result.errors[0]?.message}`);
   }
 
-  const data = await response.json();
   const rawCalendar =
-    data?.data?.user?.contributionsCollection?.contributionCalendar;
-  if (!rawCalendar) throw new Error("Missing calendar data in API response.");
+    result.data?.user?.contributionsCollection?.contributionCalendar;
+  if (!rawCalendar) {
+    throw new Error(
+      `User "${username}" not found or has no contribution data.`,
+    );
+  }
 
   return mapCalendar(rawCalendar);
 }
