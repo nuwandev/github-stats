@@ -6,13 +6,24 @@ import type {
   ContributionDay,
   ContributionWeek,
 } from "../types/calendar.js";
+import { fetchContributionCalendar } from "../api/fetchContributionCalendar.js";
 
-export interface ContributionGraphProps {
-  calendar: ContributionCalendar;
-  yearLabel?: string | number;
-  totalLabel?: string;
+export type ContributionGraphProps = {
   className?: string;
-}
+  yearLabel?: string;
+  totalLabel?: string;
+} & (
+  | {
+      calendar: ContributionCalendar;
+      username?: never;
+      githubToken?: never;
+    }
+  | {
+      calendar?: never;
+      username: string;
+      githubToken: string;
+    }
+);
 
 const CONTRIBUTION_COLORS: Record<number, string> = {
   0: "#161b22",
@@ -69,12 +80,26 @@ function formatDateLabel(day: ContributionDay): string {
   });
 }
 
-export function ContributionGraph({
+export async function ContributionGraph({
   calendar,
+  username,
+  githubToken,
   yearLabel,
   totalLabel,
   className = "",
 }: Readonly<ContributionGraphProps>) {
+  if (!calendar && username && githubToken) {
+    calendar = await fetchContributionCalendar(username, githubToken);
+  }
+
+  if (!calendar) {
+    return (
+      <div className="text-red-600 dark:text-red-400">
+        Error: Please provide either a calendar object or a username/token.
+      </div>
+    );
+  }
+
   const [hovered, setHovered] = useState<{
     day: ContributionDay;
     x: number;
