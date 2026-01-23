@@ -441,15 +441,9 @@ import "@nuwan-dev/github-stats/style.css";
 
 ---
 
-## Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
----
-
 ## License
 
-MIT © [nuwan-dev](https://github.com/nuwandev)
+This project is licensed under the [MIT License](LICENSE) – see the LICENSE file for details.
 
 ---
 
