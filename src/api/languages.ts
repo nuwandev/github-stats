@@ -39,7 +39,7 @@ interface GitHubLanguageResponse {
 interface LanguageAggregation {
   bytes: number;
   repos: Set<string>;
-  color: string;
+  color?: string | undefined; // color is optional, decorative only
 }
 
 /**
@@ -202,13 +202,14 @@ function aggregateLanguageStats(
       const current = languageMap.get(name) ?? {
         bytes: 0,
         repos: new Set<string>(),
-        color: color ?? "",
+        color: color, // color is optional
       };
 
       current.bytes += size;
       current.repos.add(repo.name);
+      // Only set color if not already set and color is present
       if (color && !current.color) {
-        current.color = color ?? "";
+        current.color = color;
       }
 
       languageMap.set(name, current);
