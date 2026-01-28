@@ -13,6 +13,7 @@ interface GitHubLanguageResponse {
         };
         nodes: Array<{
           name: string;
+          owner: { login: string };
           isFork: boolean;
           isPrivate: boolean;
           languages: {
@@ -49,21 +50,23 @@ async function fetchAllRepositories(
   username: string,
   token: string,
   options: { includeForks?: boolean; includePrivate?: boolean } = {},
-): Promise<{
-  repositories: Array<{
-    name: string;
-    isFork: boolean;
-    isPrivate: boolean;
-    languages: {
-      edges: Array<{ size: number; node: { name: string; color?: string } }>;
-    };
-  }>;
-  totalCount: number;
-}> {
+  ): Promise<{
+    repositories: Array<{
+      name: string;
+      owner: { login: string };
+      isFork: boolean;
+      isPrivate: boolean;
+      languages: {
+        edges: Array<{ size: number; node: { name: string; color?: string } }>;
+      };
+    }>;
+    totalCount: number;
+  }> {
   const { includeForks = false, includePrivate = false } = options;
 
   const repositories: Array<{
     name: string;
+    owner: { login: string };
     isFork: boolean;
     isPrivate: boolean;
     languages: {
@@ -92,6 +95,7 @@ async function fetchAllRepositories(
           }
           nodes {
             name
+            owner { login }
             isFork
             isPrivate
             languages(first: 20, orderBy: { field: SIZE, direction: DESC }) {
@@ -181,6 +185,7 @@ async function fetchAllRepositories(
 function aggregateLanguageStats(
   repositories: Array<{
     name: string;
+    owner: { login: string };
     isFork: boolean;
     isPrivate: boolean;
     languages: {
@@ -198,6 +203,8 @@ function aggregateLanguageStats(
       const name = edge.node.name;
       const size = edge.size;
       const color = edge.node.color;
+      // Use owner/name as unique repo identifier
+      const repoId = repo.owner?.login ? `${repo.owner.login}/${repo.name}` : repo.name;
 
       const current = languageMap.get(name) ?? {
         bytes: 0,
@@ -206,7 +213,7 @@ function aggregateLanguageStats(
       };
 
       current.bytes += size;
-      current.repos.add(repo.name);
+      current.repos.add(repoId);
       // Only set color if not already set and color is present
       if (color && !current.color) {
         current.color = color;
