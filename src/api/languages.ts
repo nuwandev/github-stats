@@ -74,13 +74,16 @@ async function fetchAllRepositories(
   let cursor: string | null = null;
   let totalCount = 0;
 
+  // Note: Private repositories require the token to have the 'repo' scope and the viewer to have access.
+  // The 'privacy' variable allows explicit filtering of public/private repos at the API level.
   const query = `
-    query UserRepoLanguages($login: String!, $cursor: String) {
+    query UserRepoLanguages($login: String!, $cursor: String, $privacy: RepositoryPrivacy) {
       user(login: $login) {
         repositories(
           first: 100
           after: $cursor
           ownerAffiliations: OWNER
+          privacy: $privacy
         ) {
           totalCount
           pageInfo {
@@ -121,7 +124,11 @@ async function fetchAllRepositories(
       },
       body: JSON.stringify({
         query,
-        variables: { login: username, cursor },
+        variables: {
+          login: username,
+          cursor,
+          privacy: includePrivate ? null : "PUBLIC",
+        },
       }),
     });
 
