@@ -141,11 +141,19 @@ async function fetchAllRepositories(
     const result: GitHubLanguageResponse = await response.json();
 
     if (Array.isArray(result.errors) && result.errors.length > 0) {
+      // Check for permission/scope errors
+      const forbidden = result.errors.find(e => e.message && e.message.toLowerCase().includes("forbidden"));
+      if (forbidden) {
+        throw new Error(`GitHub API permission error: Your token may lack required scopes or access. (${forbidden.message})`);
+      }
       throw new Error(`GitHub GraphQL Error: ${result.errors[0]?.message}`);
     }
 
+    if (result.data?.user === null) {
+      throw new Error(`User \"${username}\" not found.`);
+    }
     if (!result.data?.user?.repositories) {
-      throw new Error(`User "${username}" not found or has no repositories.`);
+      throw new Error(`No repositories found or insufficient permissions for user \"${username}\".`);
     }
 
     const repos = result.data.user.repositories;
