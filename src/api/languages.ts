@@ -6,12 +6,15 @@ interface GitHubLanguageResponse {
   data?: {
     user?: {
       repositories: {
+        totalCount?: number;
         pageInfo: {
           hasNextPage: boolean;
           endCursor: string | null;
         };
         nodes: Array<{
           name: string;
+          isFork: boolean;
+          isPrivate: boolean;
           languages: {
             edges: Array<{
               size: number;
@@ -36,7 +39,7 @@ interface GitHubLanguageResponse {
 interface LanguageAggregation {
   bytes: number;
   repos: Set<string>;
-  color?: string | undefined;
+  color: string;
 }
 
 /**
@@ -45,22 +48,31 @@ interface LanguageAggregation {
 async function fetchAllRepositories(
   username: string,
   token: string,
-): Promise<
-  Array<{
+  options: { includeForks?: boolean; includePrivate?: boolean } = {},
+): Promise<{
+  repositories: Array<{
     name: string;
+    isFork: boolean;
+    isPrivate: boolean;
     languages: {
       edges: Array<{ size: number; node: { name: string; color?: string } }>;
     };
-  }>
-> {
+  }>;
+  totalCount: number;
+}> {
+  const { includeForks = false, includePrivate = false } = options;
+
   const repositories: Array<{
     name: string;
+    isFork: boolean;
+    isPrivate: boolean;
     languages: {
       edges: Array<{ size: number; node: { name: string; color?: string } }>;
     };
   }> = [];
   let hasNextPage = true;
   let cursor: string | null = null;
+  let totalCount = 0;
 
   const query = `
     query UserRepoLanguages($login: String!, $cursor: String) {
@@ -69,14 +81,16 @@ async function fetchAllRepositories(
           first: 100
           after: $cursor
           ownerAffiliations: OWNER
-          isFork: false
         ) {
+          totalCount
           pageInfo {
             hasNextPage
             endCursor
           }
           nodes {
             name
+            isFork
+            isPrivate
             languages(first: 20, orderBy: { field: SIZE, direction: DESC }) {
               edges {
                 size
@@ -126,7 +140,20 @@ async function fetchAllRepositories(
     }
 
     const repos = result.data.user.repositories;
-    repositories.push(...repos.nodes);
+
+    // Capture total count from first request
+    if (totalCount === 0 && repos.totalCount !== undefined) {
+      totalCount = repos.totalCount;
+    }
+
+    // Filter based on options
+    const reposToAdd = repos.nodes.filter((repo) => {
+      if (!includeForks && repo.isFork) return false;
+      if (!includePrivate && repo.isPrivate) return false;
+      return true;
+    });
+
+    repositories.push(...reposToAdd);
 
     hasNextPage = repos.pageInfo.hasNextPage;
     cursor = repos.pageInfo.endCursor;
@@ -138,7 +165,7 @@ async function fetchAllRepositories(
     }
   }
 
-  return repositories;
+  return { repositories, totalCount };
 }
 
 /**
@@ -147,6 +174,8 @@ async function fetchAllRepositories(
 function aggregateLanguageStats(
   repositories: Array<{
     name: string;
+    isFork: boolean;
+    isPrivate: boolean;
     languages: {
       edges: Array<{ size: number; node: { name: string; color?: string } }>;
     };
@@ -155,6 +184,9 @@ function aggregateLanguageStats(
   const languageMap = new Map<string, LanguageAggregation>();
 
   for (const repo of repositories) {
+    // Skip repos with no languages
+    if (repo.languages.edges.length === 0) continue;
+
     for (const edge of repo.languages.edges) {
       const name = edge.node.name;
       const size = edge.size;
@@ -163,13 +195,13 @@ function aggregateLanguageStats(
       const current = languageMap.get(name) ?? {
         bytes: 0,
         repos: new Set<string>(),
-        color,
+        color: color ?? "",
       };
 
       current.bytes += size;
       current.repos.add(repo.name);
       if (color && !current.color) {
-        current.color = color;
+        current.color = color ?? "";
       }
 
       languageMap.set(name, current);
@@ -184,23 +216,39 @@ function aggregateLanguageStats(
  *
  * @param username - GitHub username
  * @param token - GitHub OAuth token or Personal Access Token
+ * @param options - Optional settings
+ * @param options.includeForks - Include forked repositories (default: false)
+ * @param options.includePrivate - Include private repositories (default: false)
  * @returns Language statistics ordered by percentage (high to low)
  *
  * @example
  * ```typescript
+ * // Simple usage - just get languages and percentages (public, non-fork repos only)
  * const stats = await fetchLanguageStats('octocat', process.env.GITHUB_TOKEN);
- * console.log(stats.languages[0]); // Most used language
- * console.log(stats.totalBytes); // Total bytes across all languages
+ * stats.languages.forEach(lang => {
+ *   console.log(`${lang.language}: ${lang.percentage.toFixed(1)}%`);
+ * });
+ *
+ * // Include everything (forks + private repos)
+ * const allStats = await fetchLanguageStats('octocat', token, {
+ *   includeForks: true,
+ *   includePrivate: true
+ * });
  * ```
  */
 export async function fetchLanguageStats(
   username: string,
   token: string,
+  options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<LanguageStatsResult> {
   // Fetch all repositories with pagination
-  const repositories = await fetchAllRepositories(username, token);
+  const { repositories, totalCount } = await fetchAllRepositories(
+    username,
+    token,
+    options,
+  );
 
-  // Aggregate language data
+  // Aggregate language data (only repos with languages)
   const languageMap = aggregateLanguageStats(repositories);
 
   // Calculate total bytes
@@ -213,7 +261,7 @@ export async function fetchLanguageStats(
     return {
       languages: [],
       totalBytes: 0,
-      totalRepos: repositories.length,
+      totalRepos: repositories.length, // Filtered count
     };
   }
 
@@ -232,7 +280,7 @@ export async function fetchLanguageStats(
   return {
     languages,
     totalBytes,
-    totalRepos: repositories.length,
+    totalRepos: repositories.length, // Filtered count
   };
 }
 
@@ -242,19 +290,24 @@ export async function fetchLanguageStats(
  * @param username - GitHub username
  * @param token - GitHub OAuth token or Personal Access Token
  * @param limit - Number of top languages to return (default: 10)
+ * @param options - Optional settings for filtering repos
  * @returns Top N languages ordered by percentage
  *
  * @example
  * ```typescript
+ * // Get top 5 languages (public, non-fork repos)
  * const topSkills = await getTopLanguages('octocat', process.env.GITHUB_TOKEN, 5);
- * // Returns top 5 languages
+ * topSkills.forEach(skill => {
+ *   console.log(`${skill.language}: ${skill.percentage.toFixed(1)}%`);
+ * });
  * ```
  */
 export async function getTopLanguages(
   username: string,
   token: string,
   limit = 10,
+  options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<LanguageStats[]> {
-  const stats = await fetchLanguageStats(username, token);
+  const stats = await fetchLanguageStats(username, token, options);
   return stats.languages.slice(0, limit);
 }

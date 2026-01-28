@@ -1,8 +1,15 @@
-export * from "./types/calendar.js";
+// API Functions
+export { fetchContributionCalendar } from "./api/contributions.js";
+export { fetchLanguageStats, getTopLanguages } from "./api/languages.js";
 
-export { fetchContributionCalendar } from "./api/fetchContributionCalendar.js";
+// React Components
+export { ContributionGraph } from "./components/ContributionGraph.js";
 
-export {
-  ContributionGraph,
-  type ContributionGraphProps,
-} from "./components/ContributionGraph.js";
+// TypeScript Types
+export type {
+  ContributionCalendar,
+  ContributionWeek,
+  ContributionDay,
+} from "./types/calendar.js";
+export type { LanguageStats, LanguageStatsResult } from "./types/languages.js";
+export type { ContributionGraphProps } from "./components/ContributionGraph.js";
