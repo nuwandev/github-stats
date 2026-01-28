@@ -60,7 +60,6 @@ async function fetchAllRepositories(
         edges: Array<{ size: number; node: { name: string; color?: string } }>;
       };
     }>;
-    totalCount: number;
   }> {
   const { includeForks = false, includePrivate = false } = options;
 
@@ -75,7 +74,7 @@ async function fetchAllRepositories(
   }> = [];
   let hasNextPage = true;
   let cursor: string | null = null;
-  let totalCount = 0;
+  // let totalCount = 0;
 
   // Note: Private repositories require the token to have the 'repo' scope and the viewer to have access.
   // The 'privacy' variable allows explicit filtering of public/private repos at the API level.
@@ -88,7 +87,6 @@ async function fetchAllRepositories(
           ownerAffiliations: OWNER
           privacy: $privacy
         ) {
-          totalCount
           pageInfo {
             hasNextPage
             endCursor
@@ -152,10 +150,7 @@ async function fetchAllRepositories(
 
     const repos = result.data.user.repositories;
 
-    // Capture total count from first request
-    if (totalCount === 0 && repos.totalCount !== undefined) {
-      totalCount = repos.totalCount;
-    }
+    // totalCount removed
 
     // Filter based on options
     const reposToAdd = repos.nodes.filter((repo) => {
@@ -176,7 +171,7 @@ async function fetchAllRepositories(
     }
   }
 
-  return { repositories, totalCount };
+  return { repositories };
 }
 
 /**
@@ -257,7 +252,7 @@ export async function fetchLanguageStats(
   options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<LanguageStatsResult> {
   // Fetch all repositories with pagination
-  const { repositories, totalCount } = await fetchAllRepositories(
+  const { repositories } = await fetchAllRepositories(
     username,
     token,
     options,
