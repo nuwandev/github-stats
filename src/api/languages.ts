@@ -50,17 +50,17 @@ async function fetchAllRepositories(
   username: string,
   token: string,
   options: { includeForks?: boolean; includePrivate?: boolean } = {},
-  ): Promise<{
-    repositories: Array<{
-      name: string;
-      owner: { login: string };
-      isFork: boolean;
-      isPrivate: boolean;
-      languages: {
-        edges: Array<{ size: number; node: { name: string; color?: string } }>;
-      };
-    }>;
-  }> {
+): Promise<{
+  repositories: Array<{
+    name: string;
+    owner: { login: string };
+    isFork: boolean;
+    isPrivate: boolean;
+    languages: {
+      edges: Array<{ size: number; node: { name: string; color?: string } }>;
+    };
+  }>;
+}> {
   const { includeForks = false, includePrivate = false } = options;
 
   const repositories: Array<{
@@ -142,9 +142,13 @@ async function fetchAllRepositories(
 
     if (Array.isArray(result.errors) && result.errors.length > 0) {
       // Check for permission/scope errors
-      const forbidden = result.errors.find(e => e.message && e.message.toLowerCase().includes("forbidden"));
+      const forbidden = result.errors.find(
+        (e) => e.message && e.message.toLowerCase().includes("forbidden"),
+      );
       if (forbidden) {
-        throw new Error(`GitHub API permission error: Your token may lack required scopes or access. (${forbidden.message})`);
+        throw new Error(
+          `GitHub API permission error: Your token may lack required scopes or access. (${forbidden.message})`,
+        );
       }
       throw new Error(`GitHub GraphQL Error: ${result.errors[0]?.message}`);
     }
@@ -153,7 +157,9 @@ async function fetchAllRepositories(
       throw new Error(`User \"${username}\" not found.`);
     }
     if (!result.data?.user?.repositories) {
-      throw new Error(`No repositories found or insufficient permissions for user \"${username}\".`);
+      throw new Error(
+        `No repositories found or insufficient permissions for user \"${username}\".`,
+      );
     }
 
     const repos = result.data.user.repositories;
@@ -207,7 +213,9 @@ function aggregateLanguageStats(
       const size = edge.size;
       const color = edge.node.color;
       // Use owner/name as unique repo identifier
-      const repoId = repo.owner?.login ? `${repo.owner.login}/${repo.name}` : repo.name;
+      const repoId = repo.owner?.login
+        ? `${repo.owner.login}/${repo.name}`
+        : repo.name;
 
       const current = languageMap.get(name) ?? {
         bytes: 0,
@@ -260,11 +268,7 @@ export async function fetchLanguageStats(
   options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<LanguageStatsResult> {
   // Fetch all repositories with pagination
-  const { repositories } = await fetchAllRepositories(
-    username,
-    token,
-    options,
-  );
+  const { repositories } = await fetchAllRepositories(username, token, options);
 
   // Aggregate language data (only repos with languages)
   const languageMap = aggregateLanguageStats(repositories);
