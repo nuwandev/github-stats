@@ -13,10 +13,12 @@ Build comprehensive GitHub profiles with contribution graphs and programming lan
 ## ✨ Features
 
 - 📅 **Contribution Calendars** - Beautiful GitHub-style contribution graphs with React components
-- 🎨 **Language Statistics** - Analyze programming languages, skills, and expertise levels
-- ⚡ **High Performance** - GraphQL-based API with smart pagination and caching
+- 💻 **Language Statistics** - Complete language analysis across ALL repositories (public + private)
+- 🔒 **Private Repository Support** - Full access to private repos with proper token scopes
+- 📊 **Accurate Data** - Fetches ALL languages (not just top 20) with comprehensive pagination
+- ⚡ **High Performance** - GraphQL-based API with smart pagination
 - 🎯 **Type-Safe** - Full TypeScript support with comprehensive type definitions
-- 🎨 **Customizable** - Flexible styling, custom date ranges, and label overrides
+- 🎨 **Customizable** - Flexible options for forks, private repos, and styling
 - 🚀 **Framework Agnostic** - Works with Next.js, Vite, React, and any TypeScript project
 
 ---
@@ -33,16 +35,27 @@ npm install @nuwan-dev/github-stats
 
 ### 1. Get a GitHub Token
 
-You need a GitHub Personal Access Token:
+You need a GitHub Personal Access Token to access GitHub's API:
 
 1. Go to [GitHub Settings → Tokens](https://github.com/settings/tokens)
-2. Click **"Generate new token (classic)"**
-3. Select scope: **`read:user`** and **`repo`**
-4. Save in `.env.local`:
+2. Click **"Generate new token (classic)"** or create a **Fine-grained token**
+3. **Required scopes:**
+   - ✅ `read:user` - For basic user information
+   - ✅ `repo` - **Required for private repository access**
+
+**Important:** Without the `repo` scope, private repositories will not be included in language statistics.
+
+4. Save your token securely in `.env.local`:
 
 ```bash
+# For server-side usage (Next.js Server Components, Node.js)
 GITHUB_TOKEN=ghp_your_token_here
+
+# For client-side usage (Next.js Client Components)
+NEXT_PUBLIC_GITHUB_TOKEN=ghp_your_token_here
 ```
+
+**Security Note:** Never commit tokens to git. The `.env.local` file is automatically ignored by Next.js.
 
 ### 2. Choose Your Feature
 
@@ -154,46 +167,70 @@ interface ContributionDay {
 
 ## 🎯 Feature 2: Language Statistics
 
-Analyze programming languages and skills from GitHub repositories.
+Analyze programming languages across ALL your GitHub repositories with complete accuracy.
+
+### Key Features
+
+✅ **Complete Coverage** - Fetches ALL repositories (public + private) and ALL languages (no 20-item limit)  
+✅ **Private Repository Support** - Access private repos with proper token scopes  
+✅ **Flexible Filtering** - Choose to include/exclude forks and private repos  
+✅ **Accurate Percentages** - Based on total codebase size across all repos
 
 ### Basic Usage
 
 ```typescript
 import { fetchLanguageStats } from "@nuwan-dev/github-stats";
 
-// Default: public, non-fork repositories
+// Fetch all public repos, excluding forks (default)
 const stats = await fetchLanguageStats("nuwandev", token);
 
 console.log(stats);
 // {
 //   languages: [
 //     {
-//       language: 'TypeScript',
-//       bytes: 1234567,
-//       repos: 42,
-//       percentage: 45.2,
-//       color: '#3178c6'
+//       name: 'TypeScript',
+//       size: 1234567,          // Bytes of code
+//       repoCount: 42,           // Number of repos using this
+//       percentage: 45.2,        // Percentage of total codebase
+//       color: '#3178c6'         // GitHub's official color
 //     },
-//     { language: 'JavaScript', bytes: 987654, repos: 38, percentage: 36.1, ... },
+//     { name: 'JavaScript', size: 987654, repoCount: 38, percentage: 36.1, ... },
 //     ...
 //   ],
-//   totalBytes: 2734567,
-//   totalRepos: 45,
-//   repoCounts: {
-//     total: 49,
-//     public: 46,
-//     private: 3,
-//     forks: 4,
-//     nonForks: 45
-//   },
-//   filteredRepoCounts: {
-//     total: 45,
-//     public: 45,
-//     private: 0,
-//     forks: 0,
-//     nonForks: 45
-//   }
+//   totalSize: 2734567,         // Total bytes across all languages
+//   totalRepos: 45              // Total repositories analyzed
 // }
+```
+
+### Include Private Repositories
+
+```typescript
+// Fetch ALL repos including private ones
+const allStats = await fetchLanguageStats("nuwandev", token, {
+  includePrivate: true, // Access private repos (requires 'repo' scope)
+  includeForks: false, // Still exclude forks
+});
+
+console.log(`Analyzed ${allStats.totalRepos} repos (including private)`);
+```
+
+### Include Forks
+
+```typescript
+// Include forked repositories in analysis
+const statsWithForks = await fetchLanguageStats("nuwandev", token, {
+  includePrivate: false,
+  includeForks: true, // Include forks
+});
+```
+
+### All Options
+
+```typescript
+const completeStats = await fetchLanguageStats("nuwandev", token, {
+  includePrivate: true, // Default: false
+  includeForks: true, // Default: false
+});
 ```
 
 ### Get Top Languages
@@ -201,10 +238,11 @@ console.log(stats);
 ```typescript
 import { getTopLanguages } from "@nuwan-dev/github-stats";
 
+// Get top 5 languages
 const topSkills = await getTopLanguages("nuwandev", token, 5);
 
 topSkills.forEach((skill, i) => {
-  console.log(`${i + 1}. ${skill.language} - ${skill.percentage.toFixed(1)}%`);
+  console.log(`${i + 1}. ${skill.name} - ${skill.percentage.toFixed(1)}%`);
 });
 // 1. TypeScript - 45.2%
 // 2. JavaScript - 36.1%
@@ -216,7 +254,9 @@ topSkills.forEach((skill, i) => {
 ### Build a Skills Profile
 
 ```typescript
-const stats = await fetchLanguageStats("username", token);
+const stats = await fetchLanguageStats("username", token, {
+  includePrivate: true,
+});
 
 const profile = {
   // Most used language
@@ -236,52 +276,22 @@ const profile = {
   // Metrics
   diversity: stats.languages.length,
   totalProjects: stats.totalRepos,
-  linesOfCode: Math.round(stats.totalBytes / 50), // Rough estimate
+  totalCodeSize: stats.totalSize,
 };
 ```
 
-### Generate Badges for README
-
-```typescript
-const stats = await fetchLanguageStats("username", token);
-
-const badges = stats.languages.slice(0, 5).map((lang) => {
-  const color = lang.color?.replace("#", "") || "blue";
-  return `https://img.shields.io/badge/${lang.language}-${lang.percentage.toFixed(1)}%25-${color}`;
-});
-
-// Use in your GitHub README:
-// ![TypeScript](https://img.shields.io/badge/TypeScript-45.2%25-3178c6)
-```
-
-### Compare Multiple Developers
-
-```typescript
-async function compareSkills(users: string[], token: string) {
-  const results = await Promise.all(
-    users.map((user) => fetchLanguageStats(user, token)),
-  );
-
-  return results.map((stats, i) => ({
-    username: users[i],
-    primaryLanguage: stats.languages[0]?.language,
-    languageCount: stats.languages.length,
-    totalRepos: stats.totalRepos,
-    topSkills: stats.languages.slice(0, 3).map((l) => l.language),
-  }));
-}
-
-const comparison = await compareSkills(["user1", "user2", "user3"], token);
-```
-
-### API Reference
+### Language Statistics API Reference
 
 #### `fetchLanguageStats()`
 
 ```typescript
 fetchLanguageStats(
   username: string,
-  token: string
+  token: string,
+  options?: {
+    includePrivate?: boolean;  // Default: false - Include private repos (requires 'repo' scope)
+    includeForks?: boolean;    // Default: false - Include forked repos
+  }
 ): Promise<LanguageStatsResult>
 ```
 
@@ -290,14 +300,14 @@ fetchLanguageStats(
 ```typescript
 interface LanguageStatsResult {
   languages: LanguageStats[]; // Sorted by percentage (high to low)
-  totalBytes: number; // Total code across all languages
+  totalSize: number; // Total bytes across all languages
   totalRepos: number; // Repositories analyzed
 }
 
 interface LanguageStats {
-  language: string; // "TypeScript", "JavaScript", etc.
-  bytes: number; // Total bytes of code
-  repos: number; // Number of repos using this language
+  name: string; // "TypeScript", "JavaScript", etc.
+  size: number; // Total bytes of code
+  repoCount: number; // Number of repos using this language
   percentage: number; // Percentage of total codebase (0-100)
   color?: string; // GitHub's official color (#hex)
 }
@@ -309,7 +319,11 @@ interface LanguageStats {
 getTopLanguages(
   username: string,
   token: string,
-  limit?: number  // Default: 10
+  limit?: number,  // Default: 10
+  options?: {
+    includePrivate?: boolean;
+    includeForks?: boolean;
+  }
 ): Promise<LanguageStats[]>
 ```
 
@@ -334,7 +348,10 @@ export default async function Portfolio() {
   // Fetch all data in parallel
   const [contributions, languages] = await Promise.all([
     fetchContributionCalendar(username, token),
-    fetchLanguageStats(username, token),
+    fetchLanguageStats(username, token, {
+      includePrivate: true,
+      includeForks: false,
+    }),
   ]);
 
   return (
@@ -343,7 +360,7 @@ export default async function Portfolio() {
       <div>
         <h1>@{username}</h1>
         <p>{contributions.total} contributions this year</p>
-        <p>Primary language: {languages.languages[0]?.language}</p>
+        <p>Primary language: {languages.languages[0]?.name}</p>
       </div>
 
       {/* Contribution Graph */}
@@ -356,8 +373,8 @@ export default async function Portfolio() {
       <div>
         <h2>Top Skills</h2>
         {languages.languages.slice(0, 5).map((lang) => (
-          <div key={lang.language}>
-            <span>{lang.language}</span>
+          <div key={lang.name}>
+            <span>{lang.name}</span>
             <span>{lang.percentage.toFixed(1)}%</span>
             <div
               className="h-2 rounded-full"
@@ -382,7 +399,7 @@ export default async function Portfolio() {
         </div>
         <div>
           <h3>Code Size</h3>
-          <p>{(languages.totalBytes / 1024 / 1024).toFixed(2)} MB</p>
+          <p>{(languages.totalSize / 1024 / 1024).toFixed(2)} MB</p>
         </div>
       </div>
     </div>
@@ -390,24 +407,65 @@ export default async function Portfolio() {
 }
 ```
 
-### Skills Visualization Component
+### Client-Side Usage (Next.js App Router)
 
 ```tsx
-import { fetchLanguageStats } from "@nuwan-dev/github-stats";
-import { useEffect, useState } from "react";
+"use client";
 
-export function SkillsChart({ username, token }) {
-  const [stats, setStats] = useState(null);
+import { useEffect, useState } from "react";
+import {
+  fetchLanguageStats,
+  ContributionGraph,
+  type LanguageStatsResult,
+} from "@nuwan-dev/github-stats";
+
+export default function StatsPage() {
+  const [languages, setLanguages] = useState<LanguageStatsResult | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchLanguageStats(username, token).then(setStats);
-  }, [username, token]);
+    async function loadStats() {
+      const token = process.env.NEXT_PUBLIC_GITHUB_TOKEN!;
+      const stats = await fetchLanguageStats("nuwandev", token, {
+        includePrivate: true,
+      });
+      setLanguages(stats);
+      setLoading(false);
+    }
+    loadStats();
+  }, []);
 
-  if (!stats) return <div>Loading skills...</div>;
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="space-y-4">
-      <h2>Language Distribution</h2>
+    <div>
+      <h1>My GitHub Stats</h1>
+      {languages && (
+        <div>
+          {languages.languages.map((lang) => (
+            <div key={lang.name}>
+              {lang.name}: {lang.percentage.toFixed(1)}%
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+export function SkillsChart({ username, token }) {
+const [stats, setStats] = useState(null);
+
+useEffect(() => {
+fetchLanguageStats(username, token).then(setStats);
+}, [username, token]);
+
+if (!stats) return <div>Loading skills...</div>;
+
+return (
+<div className="space-y-4">
+<h2>Language Distribution</h2>
 
       {/* Pie chart or bar chart */}
       {stats.languages.map((lang) => (
@@ -427,9 +485,11 @@ export function SkillsChart({ username, token }) {
         languages
       </div>
     </div>
-  );
+
+);
 }
-```
+
+````
 
 ### API Route (Next.js)
 
@@ -476,7 +536,7 @@ export async function GET(request: Request) {
     );
   }
 }
-```
+````
 
 ---
 
