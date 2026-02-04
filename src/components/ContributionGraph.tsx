@@ -1,4 +1,4 @@
-import { fetchContributionCalendar } from "../api/fetchContributionCalendar.js";
+import { fetchContributionCalendar } from "../api/contributions.js";
 import { ContributionGraphView } from "./ContributionGraphView.js";
 import type { ContributionCalendar } from "../types/calendar.js";
 
