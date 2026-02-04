@@ -161,6 +161,7 @@ Analyze programming languages and skills from GitHub repositories.
 ```typescript
 import { fetchLanguageStats } from "@nuwan-dev/github-stats";
 
+// Default: public, non-fork repositories
 const stats = await fetchLanguageStats("nuwandev", token);
 
 console.log(stats);
@@ -177,7 +178,21 @@ console.log(stats);
 //     ...
 //   ],
 //   totalBytes: 2734567,
-//   totalRepos: 95
+//   totalRepos: 45,
+//   repoCounts: {
+//     total: 49,
+//     public: 46,
+//     private: 3,
+//     forks: 4,
+//     nonForks: 45
+//   },
+//   filteredRepoCounts: {
+//     total: 45,
+//     public: 45,
+//     private: 0,
+//     forks: 0,
+//     nonForks: 45
+//   }
 // }
 ```
 

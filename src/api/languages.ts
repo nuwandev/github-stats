@@ -1,8 +1,4 @@
-import type {
-  LanguageStats,
-  LanguageStatsResult,
-  RepoCounts,
-} from "../types/languages.js";
+import type { LanguageStats, LanguageStatsResult } from "../types/languages.js";
 
 const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
@@ -314,23 +310,6 @@ async function fetchRemainingRepoLanguages(
   return edges;
 }
 
-function getRepoCounts(
-  repositories: Array<{ isFork: boolean; isPrivate: boolean }>,
-): RepoCounts {
-  const total = repositories.length;
-  const forks = repositories.filter((repo) => repo.isFork).length;
-  const privateCount = repositories.filter((repo) => repo.isPrivate).length;
-  const publicCount = total - privateCount;
-
-  return {
-    total,
-    public: publicCount,
-    private: privateCount,
-    forks,
-    nonForks: total - forks,
-  };
-}
-
 /**
  * Aggregates language statistics from all repositories
  */
@@ -383,24 +362,25 @@ function aggregateLanguageStats(
 /**
  * Fetches and aggregates GitHub language statistics for a user
  *
- * @param username - GitHub username
- * @param token - GitHub OAuth token or Personal Access Token
- * @param options - Optional settings
+ * Scans all repositories and returns language usage with percentages.
+ *
+ * @param username - GitHub username (must match authenticated user for private repos)
+ * @param token - GitHub Personal Access Token with repo scope
+ * @param options - Optional filtering settings
  * @param options.includeForks - Include forked repositories (default: false)
  * @param options.includePrivate - Include private repositories (default: false)
  * @returns Language statistics ordered by percentage (high to low)
  *
  * @example
  * ```typescript
- * // Simple usage - just get languages and percentages (public, non-fork repos only)
- * const stats = await fetchLanguageStats('octocat', process.env.GITHUB_TOKEN);
+ * // Get languages from public, non-fork repos
+ * const stats = await fetchLanguageStats('octocat', token);
  * stats.languages.forEach(lang => {
- *   console.log(`${lang.language}: ${lang.percentage.toFixed(1)}%`);
+ *   console.log(`${lang.name}: ${lang.percentage.toFixed(1)}%`);
  * });
  *
- * // Include everything (forks + private repos)
+ * // Include private repos (token must have repo scope)
  * const allStats = await fetchLanguageStats('octocat', token, {
- *   includeForks: true,
  *   includePrivate: true
  * });
  * ```
@@ -412,10 +392,8 @@ export async function fetchLanguageStats(
 ): Promise<LanguageStatsResult> {
   const { includeForks = false, includePrivate = false } = options;
 
-  // Fetch all repositories with pagination (unfiltered)
+  // Fetch all repositories with pagination
   const { repositories } = await fetchAllRepositories(username, token);
-
-  const repoCounts = getRepoCounts(repositories);
 
   // Filter based on options (default: public, non-fork)
   const filteredRepositories = repositories.filter((repo) => {
@@ -424,76 +402,62 @@ export async function fetchLanguageStats(
     return true;
   });
 
-  const filteredRepoCounts = getRepoCounts(filteredRepositories);
-
-  // Aggregate language data (only repos with languages)
+  // Aggregate language data
   const languageMap = aggregateLanguageStats(filteredRepositories);
 
   // Calculate total bytes
-  const totalBytes = [...languageMap.values()].reduce(
+  const totalSize = [...languageMap.values()].reduce(
     (sum, lang) => sum + lang.bytes,
     0,
   );
 
-  if (totalBytes === 0) {
+  if (totalSize === 0) {
     return {
       languages: [],
-      languageStats: [],
-      totalBytes: 0,
-      bytesTotal: 0,
+      totalSize: 0,
       totalRepos: filteredRepositories.length,
-      reposTotal: filteredRepositories.length,
-      repoCounts,
-      reposAll: repoCounts,
-      filteredRepoCounts,
-      reposFiltered: filteredRepoCounts,
     };
   }
 
   // Convert to array and calculate percentages
   const languages: LanguageStats[] = [...languageMap.entries()]
-    .map(([name, data]) => ({
-      language: name,
-      bytes: data.bytes,
-      bytesUsed: data.bytes,
-      repos: data.repos.size,
-      repoCount: data.repos.size,
-      percentage: (data.bytes / totalBytes) * 100,
-      percent: (data.bytes / totalBytes) * 100,
-      color: data.color,
-    }))
+    .map(([name, data]) => {
+      const lang: LanguageStats = {
+        name,
+        size: data.bytes,
+        repoCount: data.repos.size,
+        percentage: (data.bytes / totalSize) * 100,
+      };
+      if (data.color) {
+        lang.color = data.color;
+      }
+      return lang;
+    })
     // Sort by percentage (high to low)
     .sort((a, b) => b.percentage - a.percentage);
 
   return {
     languages,
-    languageStats: languages,
-    totalBytes,
-    bytesTotal: totalBytes,
+    totalSize,
     totalRepos: filteredRepositories.length,
-    reposTotal: filteredRepositories.length,
-    repoCounts,
-    reposAll: repoCounts,
-    filteredRepoCounts,
-    reposFiltered: filteredRepoCounts,
   };
 }
 
 /**
  * Gets the top N languages by usage percentage
  *
- * @param username - GitHub username
- * @param token - GitHub OAuth token or Personal Access Token
+ * @param username - GitHub username (must match authenticated user for private repos)
+ * @param token - GitHub Personal Access Token
  * @param limit - Number of top languages to return (default: 10)
- * @param options - Optional settings for filtering repos
+ * @param options - Optional filtering settings
  * @returns Top N languages ordered by percentage
  *
  * @example
  * ```typescript
- * // Get top 5 languages (public, non-fork repos)
- * const topSkills = await getTopLanguages('octocat', process.env.GITHUB_TOKEN, 5);
+ * // Get top 5 languages
+ * const topSkills = await getTopLanguages('octocat', token, 5);
  * topSkills.forEach(skill => {
- *   console.log(`${skill.language}: ${skill.percentage.toFixed(1)}%`);
+ *   console.log(`${skill.name}: ${skill.percentage.toFixed(1)}%`);
  * });
  * ```
  */

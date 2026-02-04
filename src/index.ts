@@ -11,9 +11,5 @@ export type {
   ContributionWeek,
   ContributionDay,
 } from "./types/calendar.js";
-export type {
-  LanguageStats,
-  LanguageStatsResult,
-  RepoCounts,
-} from "./types/languages.js";
+export type { LanguageStats, LanguageStatsResult } from "./types/languages.js";
 export type { ContributionGraphProps } from "./components/ContributionGraph.js";
