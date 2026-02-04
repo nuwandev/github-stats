@@ -1,10 +1,15 @@
-import type { LanguageStats, LanguageStatsResult } from "../types/languages.js";
+import type {
+  LanguageStats,
+  LanguageStatsResult,
+  RepoCounts,
+} from "../types/languages.js";
 
 const GITHUB_GRAPHQL_ENDPOINT = "https://api.github.com/graphql";
 
 interface GitHubLanguageResponse {
   data?: {
-    user?: {
+    viewer?: {
+      login: string;
       repositories: {
         totalCount?: number;
         pageInfo: {
@@ -17,6 +22,10 @@ interface GitHubLanguageResponse {
           isFork: boolean;
           isPrivate: boolean;
           languages: {
+            pageInfo?: {
+              hasNextPage: boolean;
+              endCursor: string | null;
+            };
             edges: Array<{
               size: number;
               node: {
@@ -37,6 +46,35 @@ interface GitHubLanguageResponse {
   errors?: Array<{ message: string }>;
 }
 
+interface GitHubRepoLanguagesResponse {
+  data?: {
+    repository?: {
+      languages: {
+        pageInfo: {
+          hasNextPage: boolean;
+          endCursor: string | null;
+        };
+        edges: Array<{
+          size: number;
+          node: {
+            name: string;
+            color?: string;
+          };
+        }>;
+      };
+    } | null;
+  };
+  errors?: Array<{ message: string }>;
+}
+
+type LanguageEdge = {
+  size: number;
+  node: {
+    name: string;
+    color?: string;
+  };
+};
+
 interface LanguageAggregation {
   bytes: number;
   repos: Set<string>;
@@ -49,7 +87,6 @@ interface LanguageAggregation {
 async function fetchAllRepositories(
   username: string,
   token: string,
-  options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<{
   repositories: Array<{
     name: string;
@@ -57,35 +94,32 @@ async function fetchAllRepositories(
     isFork: boolean;
     isPrivate: boolean;
     languages: {
-      edges: Array<{ size: number; node: { name: string; color?: string } }>;
+      pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+      edges: LanguageEdge[];
     };
   }>;
 }> {
-  const { includeForks = false, includePrivate = false } = options;
-
   const repositories: Array<{
     name: string;
     owner: { login: string };
     isFork: boolean;
     isPrivate: boolean;
     languages: {
-      edges: Array<{ size: number; node: { name: string; color?: string } }>;
+      pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+      edges: LanguageEdge[];
     };
   }> = [];
   let hasNextPage = true;
   let cursor: string | null = null;
-  // let totalCount = 0;
 
-  // Note: Private repositories require the token to have the 'repo' scope and the viewer to have access.
-  // The 'privacy' variable allows explicit filtering of public/private repos at the API level.
   const query = `
-    query UserRepoLanguages($login: String!, $cursor: String, $privacy: RepositoryPrivacy) {
-      user(login: $login) {
+    query ViewerRepoLanguages($cursor: String) {
+      viewer {
+        login
         repositories(
           first: 100
           after: $cursor
           ownerAffiliations: OWNER
-          privacy: $privacy
         ) {
           pageInfo {
             hasNextPage
@@ -96,7 +130,11 @@ async function fetchAllRepositories(
             owner { login }
             isFork
             isPrivate
-            languages(first: 20, orderBy: { field: SIZE, direction: DESC }) {
+            languages(first: 100, orderBy: { field: SIZE, direction: DESC }) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
               edges {
                 size
                 node {
@@ -117,75 +155,180 @@ async function fetchAllRepositories(
   `;
 
   while (hasNextPage) {
-    const response = await fetch(GITHUB_GRAPHQL_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        "User-Agent": "@nuwan-dev/github-stats",
-      },
-      body: JSON.stringify({
-        query,
-        variables: {
-          login: username,
-          cursor,
-          privacy: includePrivate ? null : "PUBLIC",
-        },
-      }),
-    });
+    const result: GitHubLanguageResponse =
+      await postGraphQL<GitHubLanguageResponse>(token, query, {
+        cursor,
+      });
 
-    if (!response.ok) {
-      throw new Error(`GitHub API request failed: ${response.statusText}`);
-    }
+    assertNoGraphQLErrors(result.errors);
 
-    const result: GitHubLanguageResponse = await response.json();
-
-    if (Array.isArray(result.errors) && result.errors.length > 0) {
-      // Check for permission/scope errors
-      const forbidden = result.errors.find(
-        (e) => e.message && e.message.toLowerCase().includes("forbidden"),
-      );
-      if (forbidden) {
-        throw new Error(
-          `GitHub API permission error: Your token may lack required scopes or access. (${forbidden.message})`,
-        );
-      }
-      throw new Error(`GitHub GraphQL Error: ${result.errors[0]?.message}`);
-    }
-
-    if (result.data?.user === null) {
-      throw new Error(`User \"${username}\" not found.`);
-    }
-    if (!result.data?.user?.repositories) {
+    if (!result.data?.viewer?.repositories) {
       throw new Error(
-        `No repositories found or insufficient permissions for user \"${username}\".`,
+        "No repositories found or insufficient permissions for the authenticated user.",
       );
     }
 
-    const repos = result.data.user.repositories;
+    if (result.data.viewer.login !== username) {
+      throw new Error(
+        `Authenticated user is "${result.data.viewer.login}" but requested "${username}". Use your own username to access private repos.`,
+      );
+    }
+
+    const repos: NonNullable<
+      NonNullable<GitHubLanguageResponse["data"]>["viewer"]
+    >["repositories"] = result.data.viewer.repositories;
 
     // totalCount removed
 
-    // Filter based on options
-    const reposToAdd = repos.nodes.filter((repo) => {
-      if (!includeForks && repo.isFork) return false;
-      if (!includePrivate && repo.isPrivate) return false;
-      return true;
-    });
-
-    repositories.push(...reposToAdd);
+    repositories.push(...repos.nodes);
 
     hasNextPage = repos.pageInfo.hasNextPage;
     cursor = repos.pageInfo.endCursor;
 
-    // Optional: Log rate limit info for debugging
-    if (result.data.rateLimit) {
-      const { cost, remaining, resetAt } = result.data.rateLimit;
-      // You can log or track this: console.log(`Cost: ${cost}, Remaining: ${remaining}, Reset: ${resetAt}`);
-    }
+    // Optional: log rate limit info for debugging if needed
   }
 
+  await enrichRepositoriesWithAllLanguages(repositories, token);
+
   return { repositories };
+}
+
+async function postGraphQL<T>(
+  token: string,
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<T> {
+  const response = await fetch(GITHUB_GRAPHQL_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "User-Agent": "@nuwan-dev/github-stats",
+    },
+    body: JSON.stringify({
+      query,
+      variables,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API request failed: ${response.statusText}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+function assertNoGraphQLErrors(errors?: Array<{ message: string }>): void {
+  if (!Array.isArray(errors) || errors.length === 0) return;
+
+  const forbidden = errors.find((e) =>
+    e.message?.toLowerCase().includes("forbidden"),
+  );
+  if (forbidden) {
+    throw new Error(
+      `GitHub API permission error: Your token may lack required scopes or access. (${forbidden.message})`,
+    );
+  }
+
+  throw new Error(`GitHub GraphQL Error: ${errors[0]?.message}`);
+}
+
+async function enrichRepositoriesWithAllLanguages(
+  repositories: Array<{
+    name: string;
+    owner: { login: string };
+    languages: {
+      pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+      edges: LanguageEdge[];
+    };
+  }>,
+  token: string,
+): Promise<void> {
+  const repoLanguagesQuery = `
+    query RepoLanguages($owner: String!, $name: String!, $cursor: String) {
+      repository(owner: $owner, name: $name) {
+        languages(first: 100, after: $cursor, orderBy: { field: SIZE, direction: DESC }) {
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          edges {
+            size
+            node {
+              name
+              color
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  for (const repo of repositories) {
+    if (!repo.languages.pageInfo?.hasNextPage) continue;
+
+    const extraEdges = await fetchRemainingRepoLanguages(
+      repo.owner.login,
+      repo.name,
+      repo.languages.pageInfo.endCursor,
+      token,
+      repoLanguagesQuery,
+    );
+
+    repo.languages.edges.push(...extraEdges);
+  }
+}
+
+async function fetchRemainingRepoLanguages(
+  owner: string,
+  name: string,
+  cursor: string | null,
+  token: string,
+  query: string,
+): Promise<LanguageEdge[]> {
+  const edges: LanguageEdge[] = [];
+  let langCursor: string | null = cursor;
+  let langHasNext = true;
+
+  while (langHasNext) {
+    const result = await postGraphQL<GitHubRepoLanguagesResponse>(
+      token,
+      query,
+      {
+        owner,
+        name,
+        cursor: langCursor,
+      },
+    );
+
+    assertNoGraphQLErrors(result.errors);
+
+    const languages = result.data?.repository?.languages;
+    if (!languages) break;
+
+    edges.push(...languages.edges);
+    langHasNext = languages.pageInfo.hasNextPage;
+    langCursor = languages.pageInfo.endCursor;
+  }
+
+  return edges;
+}
+
+function getRepoCounts(
+  repositories: Array<{ isFork: boolean; isPrivate: boolean }>,
+): RepoCounts {
+  const total = repositories.length;
+  const forks = repositories.filter((repo) => repo.isFork).length;
+  const privateCount = repositories.filter((repo) => repo.isPrivate).length;
+  const publicCount = total - privateCount;
+
+  return {
+    total,
+    public: publicCount,
+    private: privateCount,
+    forks,
+    nonForks: total - forks,
+  };
 }
 
 /**
@@ -267,11 +410,24 @@ export async function fetchLanguageStats(
   token: string,
   options: { includeForks?: boolean; includePrivate?: boolean } = {},
 ): Promise<LanguageStatsResult> {
-  // Fetch all repositories with pagination
-  const { repositories } = await fetchAllRepositories(username, token, options);
+  const { includeForks = false, includePrivate = false } = options;
+
+  // Fetch all repositories with pagination (unfiltered)
+  const { repositories } = await fetchAllRepositories(username, token);
+
+  const repoCounts = getRepoCounts(repositories);
+
+  // Filter based on options (default: public, non-fork)
+  const filteredRepositories = repositories.filter((repo) => {
+    if (!includeForks && repo.isFork) return false;
+    if (!includePrivate && repo.isPrivate) return false;
+    return true;
+  });
+
+  const filteredRepoCounts = getRepoCounts(filteredRepositories);
 
   // Aggregate language data (only repos with languages)
-  const languageMap = aggregateLanguageStats(repositories);
+  const languageMap = aggregateLanguageStats(filteredRepositories);
 
   // Calculate total bytes
   const totalBytes = [...languageMap.values()].reduce(
@@ -282,8 +438,15 @@ export async function fetchLanguageStats(
   if (totalBytes === 0) {
     return {
       languages: [],
+      languageStats: [],
       totalBytes: 0,
-      totalRepos: repositories.length, // Filtered count
+      bytesTotal: 0,
+      totalRepos: filteredRepositories.length,
+      reposTotal: filteredRepositories.length,
+      repoCounts,
+      reposAll: repoCounts,
+      filteredRepoCounts,
+      reposFiltered: filteredRepoCounts,
     };
   }
 
@@ -292,8 +455,11 @@ export async function fetchLanguageStats(
     .map(([name, data]) => ({
       language: name,
       bytes: data.bytes,
+      bytesUsed: data.bytes,
       repos: data.repos.size,
+      repoCount: data.repos.size,
       percentage: (data.bytes / totalBytes) * 100,
+      percent: (data.bytes / totalBytes) * 100,
       color: data.color,
     }))
     // Sort by percentage (high to low)
@@ -301,8 +467,15 @@ export async function fetchLanguageStats(
 
   return {
     languages,
+    languageStats: languages,
     totalBytes,
-    totalRepos: repositories.length, // Filtered count
+    bytesTotal: totalBytes,
+    totalRepos: filteredRepositories.length,
+    reposTotal: filteredRepositories.length,
+    repoCounts,
+    reposAll: repoCounts,
+    filteredRepoCounts,
+    reposFiltered: filteredRepoCounts,
   };
 }
 
